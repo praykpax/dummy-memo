@@ -589,6 +589,7 @@ function mirrorLocal(){
 function save(){
   setSind('bsy','⏳ KAYEDİLİYOR...');
   mirrorLocal();
+  driveBackup();
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
     try{await dbSet(DB);setSind('ok','☁ SENKRON');}
