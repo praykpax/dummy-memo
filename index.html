@@ -377,6 +377,8 @@ tbody td{padding:9px 12px;font-size:12px;}
     <div class="hdr-r">
       <div class="sind ok" id="sind">☁ SENKRON</div>
       <button class="home-btn" id="homeBtn" onclick="goHome()" style="display:none;">🏠 Ana Sayfa</button>
+      <button class="home-btn" onclick="exportBackup()" title="Tüm veriyi .json olarak indir">⬇ Yedek İndir</button>
+      <button class="home-btn" onclick="importBackup()" title="Yedekten geri yükle">⬆ Yedek Yükle</button>
       <div class="ubadge">
         <div class="udot" id="udot"></div>
         <span class="uname" id="uname"></span>
@@ -570,13 +572,78 @@ function cpick(cid,cur,cb2){
    KAYDET
 ════════════════════════════════ */
 function setSind(s,t){const e=document.getElementById('sind');if(e){e.className='sind '+s;e.textContent=t;}}
+// Son sağlam kopyayı bu tarayıcıya yaz (Supabase boşalsa bile elde kalır)
+const BK_KEY='ilaypray_backup_v1';
+function mirrorLocal(){
+  try{
+    const snap={ts:new Date().toISOString(),data:DB};
+    localStorage.setItem(BK_KEY,JSON.stringify(snap));
+    // Son 20 anlık görüntüyü tarih damgasıyla sakla (geçmişe dönüş için)
+    let hist=[];
+    try{hist=JSON.parse(localStorage.getItem(BK_KEY+'_hist')||'[]');}catch(e){}
+    hist.push(snap);
+    if(hist.length>20)hist=hist.slice(-20);
+    localStorage.setItem(BK_KEY+'_hist',JSON.stringify(hist));
+  }catch(e){}
+}
 function save(){
   setSind('bsy','⏳ KAYEDİLİYOR...');
+  mirrorLocal();
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
     try{await dbSet(DB);setSind('ok','☁ SENKRON');}
     catch(e){setSind('err','⚠ HATA');}
   },600);
+}
+// Google Drive otomatik yedek (Google Apps Script web app endpoint'i üzerinden)
+// Kurulum: Apps Script'i deploy edip URL'i buraya yapıştırın. Boşken sessizce atlar.
+const DRIVE_URL=''; // örn: 'https://script.google.com/macros/s/XXXX/exec'
+let driveTimer=null;
+function driveBackup(){
+  if(!DRIVE_URL)return;
+  clearTimeout(driveTimer);
+  driveTimer=setTimeout(()=>{
+    try{
+      fetch(DRIVE_URL,{
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ts:new Date().toISOString(),data:DB})
+      }).catch(()=>{});
+    }catch(e){}
+  },1500);
+}
+// Tüm veriyi .json olarak indir
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='muhasebe-yedek-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+// .json yedekten geri yükle
+function importBackup(){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='application/json,.json';
+  inp.onchange=()=>{
+    const f=inp.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=async()=>{
+      try{
+        const d=JSON.parse(rd.result);
+        if(!d||!d.persons||!d.order||!Array.isArray(d.order))throw new Error('Geçersiz yedek dosyası');
+        if(!confirm('Bu yedek mevcut verilerin ÜZERİNE yazılacak. Devam edilsin mi?'))return;
+        DB=d;if(!DB.buyers)DB.buyers={};
+        mirrorLocal();
+        await dbSet(DB);
+        alert('✓ Yedek geri yüklendi.');
+        location.reload();
+      }catch(e){alert('Yedek yüklenemedi: '+e.message);}
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
 }
 
 /* ════════════════════════════════
@@ -1547,6 +1614,9 @@ async function init(){
     document.body.innerHTML='<div style="max-width:520px;margin:80px auto;padding:32px;font-family:system-ui;color:#e0e0e0;background:#1a1a1a;border:1px solid #e05a5a;border-radius:12px;text-align:center"><h2 style="color:#e05a5a">⚠ Veriler yüklenemedi</h2><p>Bağlantı veya sunucu hatası nedeniyle veriler okunamadı.</p><p><b>Verilerinize dokunulmadı, hiçbir şey silinmedi.</b></p><p>Lütfen internet bağlantınızı kontrol edip sayfayı yenileyin.</p><button onclick="location.reload()" style="margin-top:12px;padding:10px 20px;background:#f0c040;border:none;border-radius:8px;font-weight:600;cursor:pointer">Yeniden dene</button></div>';
     return;
   }
+  // Başarılı yükleme → son sağlam kopyayı yerele + Drive'a yaz
+  mirrorLocal();
+  driveBackup();
 
   buildLogin();
 
