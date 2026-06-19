@@ -1510,35 +1510,43 @@ function AdelPay(pid,id){
    BAŞLANGIÇ
 ════════════════════════════════ */
 async function init(){
+  // Bellek-içi varsayılan (TOHUM). Yalnızca tablo GERÇEKTEN boşsa veritabanına yazılır.
+  const SEED={pidSeq:3,order:['p1','p2','p3'],buyers:{},persons:{
+    p1:{pid:'p1',name:'Mehmet', color:'blue', password:'mehmet01',sales:[],payments:[]},
+    p2:{pid:'p2',name:'İlyas',  color:'gold', password:'126254',sales:[],payments:[]},
+    p3:{pid:'p3',name:'İbrahim',color:'green',password:'ibo2002',sales:[],payments:[]},
+  }};
+  let loadFailed=false;
   try{
-    DB={pidSeq:3,order:['p1','p2','p3'],buyers:{},persons:{
-      p1:{pid:'p1',name:'Mehmet', color:'blue', password:'mehmet01',sales:[],payments:[]},
-      p2:{pid:'p2',name:'İlyas',  color:'gold', password:'126254',sales:[],payments:[]},
-      p3:{pid:'p3',name:'İbrahim',color:'green',password:'ibo2002',sales:[],payments:[]},
-    }};
-    try{
-      const data=await dbGet();
-      if(data&&data.persons&&data.order&&Array.isArray(data.order)){
-        const pids=Object.keys(data.persons);
-        const hasBadNames=pids.some(pid=>{
-          const name=(data.persons[pid].name||'');
-          return name.includes('SATTIĞI')||name.includes('Sattığı')||name.length>25;
-        });
-        if(!hasBadNames){
-          DB=data;
-          if(!DB.buyers)DB.buyers={};
-        }
-      }
-    }catch(e){}
-    try{await dbSet(DB);}catch(e){}
-    let fixed=false;
-    Object.entries(DB.persons).forEach(([pid,p])=>{
-      if(!p.sales){p.sales=[];fixed=true;}
-      if(!p.payments){p.payments=[];fixed=true;}
-    });
-    if(!DB.buyers){DB.buyers={};fixed=true;}
-    if(fixed)await dbSet(DB);
-  }catch(e){console.error('DB hatası:',e);}
+    const data=await dbGet();
+    if(data===null){
+      // Satır yok / tablo boş → gerçek ilk kurulum. SADECE bu durumda tohum yazılır.
+      DB=SEED;
+      await dbSet(DB);
+    }else if(data&&data.persons&&data.order&&Array.isArray(data.order)){
+      // Geçerli veri → olduğu gibi yükle. ASLA tohumla ezme.
+      DB=data;
+      if(!DB.buyers)DB.buyers={};
+      // Yalnızca eksik alanları tamamla (yıkıcı değil).
+      let fixed=false;
+      Object.entries(DB.persons).forEach(([pid,p])=>{
+        if(!p.sales){p.sales=[];fixed=true;}
+        if(!p.payments){p.payments=[];fixed=true;}
+      });
+      if(fixed)await dbSet(DB);
+    }else{
+      // Veri var ama tanınmıyor → DOKUNMA. Üzerine yazmak yerine uyar.
+      loadFailed=true;
+    }
+  }catch(e){
+    // Ağ/DB hatası → boş veriyi ASLA geri yazma (eski veri kaybının sebebi buydu).
+    console.error('DB yüklenemedi:',e);
+    loadFailed=true;
+  }
+  if(loadFailed){
+    document.body.innerHTML='<div style="max-width:520px;margin:80px auto;padding:32px;font-family:system-ui;color:#e0e0e0;background:#1a1a1a;border:1px solid #e05a5a;border-radius:12px;text-align:center"><h2 style="color:#e05a5a">⚠ Veriler yüklenemedi</h2><p>Bağlantı veya sunucu hatası nedeniyle veriler okunamadı.</p><p><b>Verilerinize dokunulmadı, hiçbir şey silinmedi.</b></p><p>Lütfen internet bağlantınızı kontrol edip sayfayı yenileyin.</p><button onclick="location.reload()" style="margin-top:12px;padding:10px 20px;background:#f0c040;border:none;border-radius:8px;font-weight:600;cursor:pointer">Yeniden dene</button></div>';
+    return;
+  }
 
   buildLogin();
 
