@@ -283,7 +283,47 @@ tbody td{padding:9px 12px;font-size:12px;}
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:var(--bg);}
 ::-webkit-scrollbar-thumb{background:var(--brd);border-radius:3px;}
+
+/* ── İKİ YÖNLÜ HESAP (NET + ALDIĞIM) ── */
+.btn.bl{background:var(--blu);color:#fff;}.btn.bl:hover{background:#1e40af;}
+.netbar{display:flex;flex-wrap:wrap;align-items:center;gap:16px;border:1px solid var(--brd);border-left:4px solid var(--mut);border-radius:10px;padding:14px 20px;margin-bottom:22px;background:var(--sur);box-shadow:0 1px 4px rgba(28,25,23,.05);}
+.netbar.ac{border-left-color:var(--acc);}
+.netbar.rd{border-left-color:var(--red);}
+.netbar.gr{border-left-color:var(--grn);}
+.netbar .nb-main{flex:1;min-width:200px;}
+.netlbl{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--mut);margin-bottom:5px;}
+.netval{font-family:'IBM Plex Sans',sans-serif;font-size:16px;line-height:1.3;}
+.netval b{font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:1px;}
+.netbar.ac .netval b{color:var(--acc);}
+.netbar.rd .netval b{color:var(--red);}
+.netbar.gr .netval b{color:var(--grn);}
+.nb-chips{display:flex;gap:10px;flex-wrap:wrap;}
+.nb-chip{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:6px 12px;border-radius:6px;background:var(--bg);border:1px solid var(--brd);}
+.reldiv{height:1px;background:var(--brd);margin:30px 0;}
+.relhdr2{font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:2px;margin-bottom:18px;}
+
+/* ── RAPORLAR ── */
+.rep-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.rep-card{background:var(--sur);border:1px solid var(--brd);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(28,25,23,.05);}
+.rep-card.full{grid-column:1/-1;margin-bottom:16px;}
+.rep-h{padding:13px 18px;border-bottom:1px solid var(--brd);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mut);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+.rep-b{padding:16px 18px;}
+.rep-legend{display:flex;gap:14px;}
+.rep-lg{display:flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--mut);text-transform:none;letter-spacing:0;}
+.rep-lg i{width:10px;height:10px;border-radius:2px;display:inline-block;flex-shrink:0;}
+.rep-svg{width:100%;height:auto;display:block;}
+.rep-empty{color:var(--mut);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:34px 0;text-align:center;}
+.rep-foot{display:flex;align-items:center;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid var(--brd);flex-wrap:wrap;}
+.hbars{display:flex;flex-direction:column;gap:10px;}
+.hb{display:grid;grid-template-columns:120px 1fr 80px;align-items:center;gap:10px;}
+.hb-l{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hb-t{height:14px;background:var(--sur2);border-radius:7px;overflow:hidden;}
+.hb-f{height:100%;border-radius:7px;transition:width .5s ease;}
+.hb-v{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-align:right;color:var(--mut);}
+
 @media(max-width:1100px){.cgrid{grid-template-columns:1fr;}.dash-grid{grid-template-columns:1fr;}}
+@media(max-width:900px){.rep-grid{grid-template-columns:1fr;}.rep-stats{grid-template-columns:1fr 1fr;}}
 @media(max-width:900px){.tforms{grid-template-columns:1fr;}.g4{grid-template-columns:1fr 1fr;}.dash-stats{grid-template-columns:1fr 1fr;}}
 @media(max-width:700px){.srow{grid-template-columns:1fr 1fr;}.main{padding:14px;}.dash-stats{grid-template-columns:1fr 1fr;}}
 @media(max-width:480px){.srow{grid-template-columns:1fr;}.g4{grid-template-columns:1fr;}.dash-stats{grid-template-columns:1fr;}}
@@ -469,6 +509,7 @@ let saveTimer=null;
 
 const td=()=>new Date().toISOString().split('T')[0];
 const fmt=n=>new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
+const fmtK=n=>{n=n||0;const a=Math.abs(n);if(a>=1e6)return(n/1e6).toFixed(1)+'M';if(a>=1000)return Math.round(n/1000)+'K';return fmt(n);};
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 /* Borç hesaplama — tüm kişilerin bu kişiye satışlarından */
@@ -1038,12 +1079,16 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
   if(!sortMap[sid])sortMap[sid]={col:'date',dir:'desc'};
   if(document.getElementById('P-rel-'+buyerPid))return;
 
+  // Sadece sisteme kayıtlı kişilerle çift yönlü (aldığım/borcum) hesap kurulur.
+  const twoWay=!!DB.persons[buyerPid];
+  const rsid=`buy-${buyerPid}`;
+  if(twoWay&&!sortMap[rsid])sortMap[rsid]={col:'date',dir:'desc'};
+
   addPanel('rel-'+buyerPid,`
-    <div class="ptrow">
-      <div class="ptit" style="color:${sc};">${esc(seller.name)}'IN
-        <span style="color:${bc};">${esc(buyerName.toUpperCase())}</span>'YE SATTIĞI
-      </div>
-    </div>
+    ${twoWay?`<div class="netbar" id="net-${buyerPid}"></div>`:''}
+    ${twoWay
+      ?`<div class="relhdr2" style="color:${sc};">⬆ ${esc(seller.name)} → <span style="color:${bc};">${esc(buyerName)}</span> · SATTIĞIM</div>`
+      :`<div class="ptrow"><div class="ptit" style="color:${sc};">${esc(seller.name)}'IN <span style="color:${bc};">${esc(buyerName.toUpperCase())}</span>'YE SATTIĞI</div></div>`}
     <div class="srow" id="${sid}-stats"></div>
     <div class="tforms">
       <div class="fc">
@@ -1101,9 +1146,103 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
         <div class="fc"><div class="fc-h bl">📦 Ürün Özeti</div><div class="fc-b" style="padding:10px 12px;"><div class="plist" id="${sid}-prods"></div></div></div>
         <div class="fc"><div class="fc-h gr">📋 Ödeme Geçmişi</div><div class="fc-b" style="padding:10px 12px;"><div class="paylist" id="${sid}-pays"></div></div></div>
       </div>
-    </div>`);
+    </div>
+    ${twoWay?reverseBlockHTML(buyerPid,sellerPid,buyerName,buyerColor,seller):''}`);
 
   relRender(sellerPid, buyerPid, buyerName);
+  if(twoWay){revRender(buyerPid,sellerPid);renderNet(buyerPid,sellerPid);}
+}
+
+/* Çift yönlü hesabın "ALDIĞIM (BORCUM)" bloğu — kaynak: otherPid'in benim pid'ime satışları */
+function reverseBlockHTML(otherPid,mePid,otherName,otherColor,mePerson){
+  const rsid=`buy-${otherPid}`;
+  const oc=ch(otherColor);
+  const mc=ch(mePerson.color);
+  return `
+    <div class="reldiv"></div>
+    <div class="relhdr2" style="color:${mc};">⬇ ${esc(mePerson.name)} ← <span style="color:${oc};">${esc(otherName)}</span> · ALDIĞIM (BORCUM)</div>
+    <div class="srow" id="${rsid}-stats"></div>
+    <div class="tforms">
+      <div class="fc">
+        <div class="fc-h bl">+ ALIŞ KAYDI EKLE</div>
+        <div class="fc-b">
+          <div class="g4">
+            <div><label class="flbl">Tarih</label><input type="date" class="fi" id="${rsid}-nd" value="${td()}"></div>
+            <div><label class="flbl">Ürün Adı</label><input type="text" class="fi" id="${rsid}-np" placeholder="Ürün..." list="${rsid}-dl" autocomplete="off"><datalist id="${rsid}-dl"></datalist></div>
+            <div><label class="flbl">Adet</label><input type="number" class="fi" id="${rsid}-nq" placeholder="0" min="1" oninput="relAuto('${rsid}')"></div>
+            <div><label class="flbl">Birim ₺</label><input type="number" class="fi" id="${rsid}-npr" placeholder="0.00" step="0.01" oninput="relAuto('${rsid}')"></div>
+          </div>
+          <div class="g2">
+            <div><label class="flbl">Toplam (Otomatik)</label><input class="fi ro" id="${rsid}-auto" placeholder="—" readonly></div>
+            <div style="display:flex;align-items:flex-end;"><button class="btn bl" style="margin-bottom:0;" onclick="revSave('${otherPid}','${mePid}')">💾 KAYDET</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="fc">
+        <div class="fc-h gr">💸 ÖDEME EKLE (Borç Öde)</div>
+        <div class="fc-b">
+          <div class="g2">
+            <div><label class="flbl">Tarih</label><input type="date" class="fi" id="${rsid}-pd" value="${td()}"></div>
+            <div><label class="flbl">Tutar ₺</label><input type="number" class="fi" id="${rsid}-pa" placeholder="0.00" step="0.01"></div>
+          </div>
+          <button class="btn gr" onclick="revPay('${otherPid}','${mePid}')">💾 KAYDET</button>
+        </div>
+      </div>
+    </div>
+    <div class="cgrid">
+      <div>
+        <div class="stit">Alış Kayıtları</div>
+        <div class="twrap">
+          <div class="tbar">
+            <input type="text" class="tsrch" placeholder="Ürün ara..." id="${rsid}-srch" oninput="revTable('${otherPid}','${mePid}')">
+            <select class="tsel" id="${rsid}-fprod" onchange="revTable('${otherPid}','${mePid}')"><option value="">Tüm Ürünler</option></select>
+            <button class="sbtn on" id="${rsid}-sd" onclick="revSort('${otherPid}','${mePid}','date','desc')">↓ En Yeni</button>
+            <button class="sbtn" id="${rsid}-sa" onclick="revSort('${otherPid}','${mePid}','date','asc')">↑ En Eski</button>
+          </div>
+          <div style="max-height:520px;overflow-y:auto;">
+            <table><thead><tr>
+              <th onclick="revCol('${otherPid}','${mePid}','date')">Tarih ↕</th>
+              <th onclick="revCol('${otherPid}','${mePid}','product')">Ürün ↕</th>
+              <th style="text-align:right;" onclick="revCol('${otherPid}','${mePid}','qty')">Adet ↕</th>
+              <th style="text-align:right;">Birim ₺</th>
+              <th style="text-align:right;" onclick="revCol('${otherPid}','${mePid}','total')">Toplam ↕</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="${rsid}-tbody"></tbody>
+            <tfoot><tr class="tfoot" id="${rsid}-tfoot"></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="rcol">
+        <div class="fc"><div class="fc-h bl">📦 Aldığım Ürünler</div><div class="fc-b" style="padding:10px 12px;"><div class="plist" id="${rsid}-prods"></div></div></div>
+        <div class="fc"><div class="fc-h gr">📋 Ödeme Geçmişi</div><div class="fc-b" style="padding:10px 12px;"><div class="paylist" id="${rsid}-pays"></div></div></div>
+      </div>
+    </div>`;
+}
+
+/* Net durum çubuğu: alacağım (ben→other) − borcum (other→ben) */
+function renderNet(otherPid,mePid){
+  const el=document.getElementById('net-'+otherPid);if(!el)return;
+  const other=DB.persons[otherPid],me=DB.persons[mePid];
+  if(!other||!me)return;
+  const alacak=calcT(mePid,otherPid).bal;
+  const borc=calcT(otherPid,mePid).bal;
+  const net=alacak-borc;
+  let cls,txt;
+  if(net>0){cls='ac';txt=`${esc(other.name)} sana net <b>₺${fmt(net)}</b> borçlu`;}
+  else if(net<0){cls='rd';txt=`${esc(other.name)}'e net <b>₺${fmt(-net)}</b> borçlusun`;}
+  else{cls='gr';txt=`Hesap kapalı · net <b>₺0,00</b>`;}
+  el.className='netbar '+cls;
+  el.innerHTML=`
+    <div class="nb-main">
+      <div class="netlbl">${esc(me.name)} ↔ ${esc(other.name)} · Net Durum</div>
+      <div class="netval">${txt}</div>
+    </div>
+    <div class="nb-chips">
+      <div class="nb-chip">Alacağım: <b style="color:var(--blu);">₺${fmt(alacak)}</b></div>
+      <div class="nb-chip">Borcum: <b style="color:var(--red);">₺${fmt(borc)}</b></div>
+    </div>`;
 }
 
 function relRender(sellerPid, buyerPid, buyerName){
@@ -1169,6 +1308,7 @@ function relRender(sellerPid, buyerPid, buyerName){
     :'<div class="empty">Ödeme yok</div>';
 
   relTable(sellerPid,buyerPid);
+  if(DB.persons[buyerPid])renderNet(buyerPid,sellerPid);
 }
 
 function relSort(sellerPid,buyerPid,col,dir){
@@ -1261,15 +1401,155 @@ function relDelPay(sellerPid,id,buyerPid){
 }
 
 /* ════════════════════════════════
+   ALDIĞIM (BORCUM) — REVERSE
+   otherPid = satıcı (örn. İlyas), mePid = alıcı/ben (örn. Mehmet)
+   Kayıtlar otherPid'in sales'ine buyerPid=mePid ile yazılır (İlyas → Mehmet satışı).
+════════════════════════════════ */
+function revRender(otherPid,mePid){
+  const sid=`buy-${otherPid}`;
+  const p=DB.persons[otherPid];if(!p)return;
+  const{total,paid,bal}=calcT(otherPid,mePid);
+  const cnt=p.sales.filter(r=>r.buyerPid===mePid).length;
+  const qty=p.sales.filter(r=>r.buyerPid===mePid).reduce((s,r)=>s+r.qty,0);
+
+  const se=document.getElementById(sid+'-stats');
+  if(se)se.innerHTML=`
+    <div class="sc rd"><div class="slbl">Toplam Borç</div><div class="sval">₺${fmt(total)}</div><div class="ssub">${qty} adet · ${cnt} kayıt</div></div>
+    <div class="sc gr"><div class="slbl">Ödediğim</div><div class="sval">₺${fmt(paid)}</div></div>
+    <div class="sc ${bal>0?'ac':'gr'}"><div class="slbl">Kalan Borç</div><div class="sval" style="color:${bal>0?'var(--acc)':'var(--grn)'};">₺${fmt(bal)}</div></div>`;
+
+  const ps=prods(otherPid,mePid);
+  const pe=document.getElementById(sid+'-prods');
+  if(pe)pe.innerHTML=ps.length?ps.map(r=>`<div class="prow"><span class="pnm">${esc(r.name)}</span><span class="pqt">${r.qty} ad</span><span class="ptl">₺${fmt(r.tot)}</span></div>`).join(''):'<div class="empty">Kayıt yok</div>';
+  const dl=document.getElementById(sid+'-dl');
+  if(dl){dl.innerHTML='';ps.forEach(r=>{const o=document.createElement('option');o.value=r.name;dl.appendChild(o);});}
+  const fp=document.getElementById(sid+'-fprod');
+  if(fp){const cv=fp.value;fp.innerHTML='<option value="">Tüm Ürünler</option>';ps.forEach(r=>{const o=document.createElement('option');o.value=r.name.toLowerCase();o.textContent=r.name;fp.appendChild(o);});fp.value=cv;}
+
+  const pays=p.payments.filter(r=>r.fromPid===mePid);
+  const paye=document.getElementById(sid+'-pays');
+  if(paye)paye.innerHTML=pays.length
+    ?[...pays].reverse().map(pay=>`
+        <div class="payrow">
+          <span class="payd">${pay.date||'—'}</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="paya">+₺${fmt(pay.amount)}</span>
+            <button class="xb" onclick="revDelPay('${otherPid}','${pay.id}','${mePid}')">✕</button>
+          </div>
+        </div>`).join('')
+    :'<div class="empty">Ödeme yok</div>';
+
+  revTable(otherPid,mePid);
+}
+function revTable(otherPid,mePid){
+  const sid=`buy-${otherPid}`;
+  const p=DB.persons[otherPid];if(!p)return;
+  const srch=(document.getElementById(sid+'-srch')?.value||'').toLowerCase().trim();
+  const fv=(document.getElementById(sid+'-fprod')?.value||'').toLowerCase();
+  const s=sortMap[sid]||{col:'date',dir:'desc'};
+  let rows=p.sales.filter(r=>r.buyerPid===mePid&&(!srch||r.product.toLowerCase().includes(srch))&&(!fv||r.product.toLowerCase()===fv));
+  rows=[...rows].sort((a,b)=>{
+    let va,vb;
+    if(s.col==='product'){va=a.product.toLowerCase();vb=b.product.toLowerCase();}
+    else if(s.col==='qty'){va=a.qty;vb=b.qty;}
+    else if(s.col==='total'){va=a.qty*a.price;vb=b.qty*b.price;}
+    else{va=a.date||'';vb=b.date||'';}
+    if(va<vb)return s.dir==='asc'?-1:1;if(va>vb)return s.dir==='asc'?1:-1;return 0;
+  });
+  const tb=document.getElementById(sid+'-tbody');if(!tb)return;
+  tb.innerHTML=rows.map(r=>`<tr>
+    <td class="tdate">${r.date||'—'}</td>
+    <td class="tprod">${esc(r.product)}</td>
+    <td class="tnum">${r.qty}</td>
+    <td class="tnum">₺${fmt(r.price)}</td>
+    <td class="ttot">₺${fmt(r.qty*r.price)}</td>
+    <td><button class="xb" onclick="revDel('${otherPid}','${r.id}','${mePid}')">✕</button></td></tr>`).join('');
+  const tf=document.getElementById(sid+'-tfoot');if(!tf)return;
+  const ft=rows.reduce((s,r)=>s+r.qty*r.price,0);
+  const fq=rows.reduce((s,r)=>s+r.qty,0);
+  tf.innerHTML=`<td colspan="2" style="color:var(--mut);">${rows.length} kayıt · ${fq} adet</td><td colspan="3" style="text-align:right;color:var(--red);">₺${fmt(ft)}</td><td></td>`;
+}
+function revSort(otherPid,mePid,col,dir){
+  const sid=`buy-${otherPid}`;
+  sortMap[sid]={col,dir};
+  document.getElementById(sid+'-sa')?.classList.toggle('on',col==='date'&&dir==='asc');
+  document.getElementById(sid+'-sd')?.classList.toggle('on',col==='date'&&dir==='desc');
+  revTable(otherPid,mePid);
+}
+function revCol(otherPid,mePid,col){
+  const sid=`buy-${otherPid}`;
+  const s=sortMap[sid]||{col:'date',dir:'desc'};
+  revSort(otherPid,mePid,col,s.col===col&&s.dir==='desc'?'asc':'desc');
+}
+function revSave(otherPid,mePid){
+  const sid=`buy-${otherPid}`;
+  const np=document.getElementById(sid+'-np');
+  const nq=document.getElementById(sid+'-nq');
+  const npr=document.getElementById(sid+'-npr');
+  const product=(np?.value||'').trim();
+  const qty=parseFloat(nq?.value);
+  const price=parseFloat(npr?.value);
+  if(!product){flash(np,'Ürün adı giriniz');return;}
+  if(!qty||qty<=0){flash(nq,'Geçerli adet');return;}
+  if(!price||price<=0){flash(npr,'Geçerli fiyat');return;}
+  DB.persons[otherPid].sales.push({
+    id:'s'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
+    date:document.getElementById(sid+'-nd')?.value||'',
+    product,qty,price,buyerPid:mePid
+  });
+  np.value='';nq.value='';npr.value='';
+  document.getElementById(sid+'-auto').value='';
+  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+}
+function revDel(otherPid,id,mePid){
+  if(!confirm('Sil?'))return;
+  DB.persons[otherPid].sales=DB.persons[otherPid].sales.filter(r=>r.id!==id);
+  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+}
+function revPay(otherPid,mePid){
+  const sid=`buy-${otherPid}`;
+  const pa=document.getElementById(sid+'-pa');
+  const amount=parseFloat(pa?.value);
+  if(!amount||amount<=0){flash(pa,'Geçerli tutar');return;}
+  DB.persons[otherPid].payments.push({
+    id:'pay'+Date.now(),
+    date:document.getElementById(sid+'-pd')?.value||'',
+    amount,fromPid:mePid
+  });
+  pa.value='';save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+}
+function revDelPay(otherPid,id,mePid){
+  DB.persons[otherPid].payments=DB.persons[otherPid].payments.filter(p=>p.id!==id);
+  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+}
+
+/* ════════════════════════════════
    ADMİN
 ════════════════════════════════ */
 function buildAdmin(){
   addTab('ao','🏠 Genel Bakış');
   addTab('ap','👥 Kişi Yönetimi');
+  addTab('arep','📊 Raporlar');
   DB.order.filter(pid=>DB.persons[pid]).forEach(pid=>{
     addTab('a-'+pid,DB.persons[pid].name);
   });
   addPanel('ao','<div id="AO"></div>');
+  addPanel('arep',`
+    <div class="ptrow">
+      <div class="ptit" style="color:var(--pur);">📊 Görsel Raporlar</div>
+      <button class="ebtn" onclick="REPrender()">🔄 Yenile</button>
+    </div>
+    <div class="rep-stats" id="REP-stats"></div>
+    <div class="rep-card full">
+      <div class="rep-h"><span>Aylık Satış / Tahsilat Trendi</span>
+        <span class="rep-legend"><span class="rep-lg"><i style="background:#5a9ee0;"></i>Satış</span><span class="rep-lg"><i style="background:#3ecf6a;"></i>Tahsilat</span></span>
+      </div>
+      <div class="rep-b" id="REP-trend"></div>
+    </div>
+    <div class="rep-grid">
+      <div class="rep-card"><div class="rep-h"><span>Ürün Dağılımı (Ciro)</span></div><div class="rep-b" id="REP-prod"></div></div>
+      <div class="rep-card"><div class="rep-h"><span>Kişi Tahsilat Durumu</span></div><div class="rep-b" id="REP-side"></div></div>
+    </div>`);
   addPanel('ap',`
     <div style="max-width:480px;">
       <div class="fc" style="margin-bottom:16px;">
@@ -1290,6 +1570,9 @@ function buildAdmin(){
   });
   cpick('AP-cp','gold',c=>{pmColor=c;});
   AOrender();APrender();
+  const rt=document.getElementById('T-arep');
+  if(rt)rt.onclick=()=>{showTab('arep');REPrender();};
+  REPrender();
   showTab('ao');
 }
 
@@ -1572,6 +1855,108 @@ function Apay(pid){
 function AdelPay(pid,id){
   DB.persons[pid].payments=DB.persons[pid].payments.filter(p=>p.id!==id);
   save();Arender(pid);AOrender();
+}
+
+/* ════════════════════════════════
+   RAPORLAR (Görsel)
+════════════════════════════════ */
+const MONTHS_TR=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+function mLabel(m){const a=m.split('-');return (MONTHS_TR[(+a[1]||1)-1]||'')+" '"+a[0].slice(2);}
+function niceMax(v){
+  if(v<=0)return 1;
+  const exp=Math.pow(10,Math.floor(Math.log10(v)));
+  const f=v/exp;let nf;
+  if(f<=1)nf=1;else if(f<=2)nf=2;else if(f<=2.5)nf=2.5;else if(f<=5)nf=5;else nf=10;
+  return nf*exp;
+}
+function repMonthlyData(){
+  const map={};
+  DB.order.filter(pid=>DB.persons[pid]).forEach(pid=>{
+    const p=DB.persons[pid];
+    p.sales.forEach(r=>{const m=(r.date||'').slice(0,7);if(!m)return;(map[m]=map[m]||{s:0,p:0}).s+=r.qty*r.price;});
+    p.payments.forEach(r=>{const m=(r.date||'').slice(0,7);if(!m)return;(map[m]=map[m]||{s:0,p:0}).p+=r.amount;});
+  });
+  return Object.keys(map).sort().map(m=>({m,s:map[m].s,p:map[m].p}));
+}
+function repProducts(){
+  const m={};
+  DB.order.filter(pid=>DB.persons[pid]).forEach(pid=>{
+    DB.persons[pid].sales.forEach(r=>{
+      const k=r.product.toLowerCase().trim();
+      if(!m[k])m[k]={name:r.product,tot:0,qty:0};
+      m[k].tot+=r.qty*r.price;m[k].qty+=r.qty;
+    });
+  });
+  return Object.values(m).sort((a,b)=>b.tot-a.tot);
+}
+function svgTrend(data){
+  if(!data.length)return '<div class="rep-empty">Tarihli kayıt yok</div>';
+  const W=820,H=300,padL=52,padR=16,padT=16,padB=46;
+  const cw=W-padL-padR,chH=H-padT-padB;
+  const max=niceMax(Math.max(1,...data.map(d=>Math.max(d.s,d.p))));
+  const n=data.length,gw=cw/n,bw=Math.min(24,gw*0.30);
+  const y=v=>padT+chH-(v/max)*chH;
+  let g='';
+  for(let i=0;i<=4;i++){const val=max*i/4,yy=y(val);
+    g+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#e2ddd4" stroke-width="1"/>`;
+    g+=`<text x="${padL-8}" y="${yy+3}" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="9" fill="#78716c">${fmtK(val)}</text>`;
+  }
+  const showEvery=n>14?Math.ceil(n/14):1;
+  data.forEach((d,i)=>{
+    const cx=padL+gw*(i+0.5),x1=cx-bw-2,x2=cx+2;
+    g+=`<rect x="${x1.toFixed(1)}" y="${y(d.s).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,(d.s/max)*chH).toFixed(1)}" rx="2" fill="#5a9ee0"><title>${mLabel(d.m)} · Satış ₺${fmt(d.s)}</title></rect>`;
+    g+=`<rect x="${x2.toFixed(1)}" y="${y(d.p).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,(d.p/max)*chH).toFixed(1)}" rx="2" fill="#3ecf6a"><title>${mLabel(d.m)} · Tahsilat ₺${fmt(d.p)}</title></rect>`;
+    if(i%showEvery===0)g+=`<text x="${cx}" y="${H-padB+16}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#78716c">${mLabel(d.m)}</text>`;
+  });
+  g+=`<line x1="${padL}" y1="${padT+chH}" x2="${W-padR}" y2="${padT+chH}" stroke="#b8b0a4" stroke-width="1"/>`;
+  return `<svg class="rep-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Aylık satış ve tahsilat trendi">${g}</svg>`;
+}
+function svgHBars(list){
+  if(!list.length)return '<div class="rep-empty">Veri yok</div>';
+  const top=list.slice(0,8);
+  const max=Math.max(1,...top.map(r=>r.tot));
+  return '<div class="hbars">'+top.map((r,i)=>{
+    const w=Math.max(2,r.tot/max*100),col=ch(PK[i%PK.length]);
+    return `<div class="hb"><div class="hb-l" title="${esc(r.name)}">${esc(r.name)}</div>
+      <div class="hb-t"><div class="hb-f" style="width:${w}%;background:${col};"></div></div>
+      <div class="hb-v">₺${fmtK(r.tot)}</div></div>`;
+  }).join('')+'</div>';
+}
+function svgPersons(){
+  const ps=DB.order.filter(pid=>DB.persons[pid]).map(pid=>{
+    const p=DB.persons[pid];
+    const total=p.sales.reduce((s,r)=>s+r.qty*r.price,0);
+    const paid=p.payments.reduce((s,r)=>s+r.amount,0);
+    return{name:p.name,color:p.color,total,paid,bal:total-paid};
+  }).filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
+  if(!ps.length)return '<div class="rep-empty">Veri yok</div>';
+  const max=Math.max(1,...ps.map(p=>p.total));
+  return '<div class="hbars">'+ps.map(p=>{
+    const tw=p.total/max*100,pw=p.total>0?p.paid/p.total*100:0;
+    return `<div class="hb"><div class="hb-l" style="color:${ch(p.color)};">${esc(p.name)}</div>
+      <div class="hb-t"><div style="width:${tw}%;height:100%;border-radius:7px;background:#e07a2b;position:relative;">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${pw}%;background:#3ecf6a;border-radius:7px;"></div></div></div>
+      <div class="hb-v" style="color:${p.bal>0?'var(--acc)':'var(--grn)'};">₺${fmtK(p.bal)}</div></div>`;
+  }).join('')+'</div><div class="rep-foot"><span class="rep-lg"><i style="background:#3ecf6a;"></i>Tahsil edilen</span><span class="rep-lg"><i style="background:#e07a2b;"></i>Kalan</span><span style="margin-left:auto;font-family:IBM Plex Mono,monospace;font-size:9px;color:var(--mut);">sağdaki: açık bakiye</span></div>';
+}
+function REPrender(){
+  let tot=0,paid=0,cnt=0;
+  DB.order.filter(pid=>DB.persons[pid]).forEach(pid=>{
+    const p=DB.persons[pid];
+    tot+=p.sales.reduce((s,r)=>s+r.qty*r.price,0);
+    paid+=p.payments.reduce((s,r)=>s+r.amount,0);
+    cnt+=p.sales.length;
+  });
+  const bal=tot-paid;
+  const se=document.getElementById('REP-stats');
+  if(se)se.innerHTML=`
+    <div class="sc bl"><div class="slbl">Toplam Satış</div><div class="sval">₺${fmtK(tot)}</div><div class="ssub">${cnt} kayıt</div></div>
+    <div class="sc gr"><div class="slbl">Toplam Tahsilat</div><div class="sval">₺${fmtK(paid)}</div></div>
+    <div class="sc ac"><div class="slbl">Açık Bakiye</div><div class="sval">₺${fmtK(bal)}</div></div>
+    <div class="sc ${tot>0?'gr':'rd'}"><div class="slbl">Tahsilat Oranı</div><div class="sval">${tot>0?Math.round(paid/tot*100):0}%</div></div>`;
+  const tr=document.getElementById('REP-trend');if(tr)tr.innerHTML=svgTrend(repMonthlyData());
+  const pr=document.getElementById('REP-prod');if(pr)pr.innerHTML=svgHBars(repProducts());
+  const sd=document.getElementById('REP-side');if(sd)sd.innerHTML=svgPersons();
 }
 
 /* ════════════════════════════════
