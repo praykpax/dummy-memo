@@ -301,6 +301,10 @@ tbody td{padding:9px 12px;font-size:12px;}
 .nb-chip{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:6px 12px;border-radius:6px;background:var(--bg);border:1px solid var(--brd);}
 .reldiv{height:1px;background:var(--brd);margin:30px 0;}
 .relhdr2{font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:2px;margin-bottom:18px;}
+.seg{display:inline-flex;gap:4px;background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:4px;margin-bottom:22px;}
+.seg-btn{padding:8px 18px;border:none;background:none;border-radius:6px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;font-weight:600;color:var(--mut);transition:all .15s;}
+.seg-btn.on{background:var(--sur);color:var(--acc);box-shadow:0 1px 3px rgba(28,25,23,.12);}
+.seg-btn:hover{color:var(--txt);}
 
 /* ── RAPORLAR ── */
 .rep-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
@@ -1086,6 +1090,11 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
 
   addPanel('rel-'+buyerPid,`
     ${twoWay?`<div class="netbar" id="net-${buyerPid}"></div>`:''}
+    ${twoWay?`<div class="seg">
+      <button class="seg-btn on" id="seg-out-${buyerPid}" onclick="relView('${buyerPid}','out')">⬆ Sattığım</button>
+      <button class="seg-btn" id="seg-in-${buyerPid}" onclick="relView('${buyerPid}','in')">⬇ Aldığım (Borcum)</button>
+    </div>`:''}
+    ${twoWay?`<div id="view-out-${buyerPid}">`:''}
     ${twoWay
       ?`<div class="relhdr2" style="color:${sc};">⬆ ${esc(seller.name)} → <span style="color:${bc};">${esc(buyerName)}</span> · SATTIĞIM</div>`
       :`<div class="ptrow"><div class="ptit" style="color:${sc};">${esc(seller.name)}'IN <span style="color:${bc};">${esc(buyerName.toUpperCase())}</span>'YE SATTIĞI</div></div>`}
@@ -1147,10 +1156,20 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
         <div class="fc"><div class="fc-h gr">📋 Ödeme Geçmişi</div><div class="fc-b" style="padding:10px 12px;"><div class="paylist" id="${sid}-pays"></div></div></div>
       </div>
     </div>
-    ${twoWay?reverseBlockHTML(buyerPid,sellerPid,buyerName,buyerColor,seller):''}`);
+    ${twoWay?`</div><div id="view-in-${buyerPid}" style="display:none;">${reverseBlockHTML(buyerPid,sellerPid,buyerName,buyerColor,seller)}</div>`:''}`);
 
   relRender(sellerPid, buyerPid, buyerName);
   if(twoWay){revRender(buyerPid,sellerPid);renderNet(buyerPid,sellerPid);}
+}
+
+/* Sattığım / Aldığım görünümleri arası geçiş */
+function relView(buyerPid,which){
+  const o=document.getElementById('view-out-'+buyerPid);
+  const i=document.getElementById('view-in-'+buyerPid);
+  if(o)o.style.display=which==='out'?'':'none';
+  if(i)i.style.display=which==='in'?'':'none';
+  document.getElementById('seg-out-'+buyerPid)?.classList.toggle('on',which==='out');
+  document.getElementById('seg-in-'+buyerPid)?.classList.toggle('on',which==='in');
 }
 
 /* Çift yönlü hesabın "ALDIĞIM (BORCUM)" bloğu — kaynak: otherPid'in benim pid'ime satışları */
@@ -1159,7 +1178,6 @@ function reverseBlockHTML(otherPid,mePid,otherName,otherColor,mePerson){
   const oc=ch(otherColor);
   const mc=ch(mePerson.color);
   return `
-    <div class="reldiv"></div>
     <div class="relhdr2" style="color:${mc};">⬇ ${esc(mePerson.name)} ← <span style="color:${oc};">${esc(otherName)}</span> · ALDIĞIM (BORCUM)</div>
     <div class="srow" id="${rsid}-stats"></div>
     <div class="tforms">
