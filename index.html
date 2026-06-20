@@ -529,6 +529,13 @@ function calcMyDebts(myPid){
     const bal=total-paid;
     if(total>0||bal!==0) result[pid]={name:p.name,color:p.color,total,paid,bal};
   });
+  // Özel alıcılardan (toptancı vb.) yapılan alışlar = bana özel borç kayıtları
+  getBuyers(myPid).forEach(b=>{
+    const total=(b.sales||[]).reduce((s,r)=>s+r.qty*r.price,0);
+    const paid=(b.payments||[]).reduce((s,r)=>s+r.amount,0);
+    const bal=total-paid;
+    if(total>0||bal!==0) result['b:'+b.id]={name:b.name,color:b.color,total,paid,bal};
+  });
   return result;
 }
 
@@ -1083,8 +1090,8 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
   if(!sortMap[sid])sortMap[sid]={col:'date',dir:'desc'};
   if(document.getElementById('P-rel-'+buyerPid))return;
 
-  // Sadece sisteme kayıtlı kişilerle çift yönlü (aldığım/borcum) hesap kurulur.
-  const twoWay=!!DB.persons[buyerPid];
+  // Çift yönlü (aldığım/borcum): hem kayıtlı kişiler hem özel alıcılar.
+  const twoWay=true;
   const rsid=`buy-${buyerPid}`;
   if(twoWay&&!sortMap[rsid])sortMap[rsid]={col:'date',dir:'desc'};
 
@@ -1240,12 +1247,12 @@ function reverseBlockHTML(otherPid,mePid,otherName,otherColor,mePerson){
 }
 
 /* Net durum çubuğu: alacağım (ben→other) − borcum (other→ben) */
-function renderNet(otherPid,mePid){
-  const el=document.getElementById('net-'+otherPid);if(!el)return;
-  const other=DB.persons[otherPid],me=DB.persons[mePid];
-  if(!other||!me)return;
-  const alacak=calcT(mePid,otherPid).bal;
-  const borc=calcT(otherPid,mePid).bal;
+function renderNet(otherKey,mePid){
+  const el=document.getElementById('net-'+otherKey);if(!el)return;
+  const me=DB.persons[mePid];if(!me)return;
+  const other=relMeta(otherKey,mePid);
+  const alacak=calcT(mePid,otherKey).bal;
+  const borc=revCalc(otherKey,mePid).bal;
   const net=alacak-borc;
   let cls,txt;
   if(net>0){cls='ac';txt=`${esc(other.name)} sana net <b>₺${fmt(net)}</b> borçlu`;}
@@ -1326,7 +1333,7 @@ function relRender(sellerPid, buyerPid, buyerName){
     :'<div class="empty">Ödeme yok</div>';
 
   relTable(sellerPid,buyerPid);
-  if(DB.persons[buyerPid])renderNet(buyerPid,sellerPid);
+  renderNet(buyerPid,sellerPid);
 }
 
 function relSort(sellerPid,buyerPid,col,dir){
@@ -1420,15 +1427,40 @@ function relDelPay(sellerPid,id,buyerPid){
 
 /* ════════════════════════════════
    ALDIĞIM (BORCUM) — REVERSE
-   otherPid = satıcı (örn. İlyas), mePid = alıcı/ben (örn. Mehmet)
-   Kayıtlar otherPid'in sales'ine buyerPid=mePid ile yazılır (İlyas → Mehmet satışı).
+   otherKey = satıcı: kayıtlı kişi pid'i (örn. İlyas) VEYA özel alıcı id'si (b...)
+   mePid    = alıcı/ben (örn. Mehmet)
+   - Kayıtlı kişi: otherKey'in sales'ine buyerPid=mePid ile yazılır (simetrik).
+   - Özel alıcı: DB.buyers[mePid] içindeki alıcı objesinin sales/payments dizisine yazılır (bana özel).
 ════════════════════════════════ */
-function revRender(otherPid,mePid){
-  const sid=`buy-${otherPid}`;
-  const p=DB.persons[otherPid];if(!p)return;
-  const{total,paid,bal}=calcT(otherPid,mePid);
-  const cnt=p.sales.filter(r=>r.buyerPid===mePid).length;
-  const qty=p.sales.filter(r=>r.buyerPid===mePid).reduce((s,r)=>s+r.qty,0);
+function relMeta(otherKey,mePid){
+  if(DB.persons[otherKey])return{name:DB.persons[otherKey].name,color:DB.persons[otherKey].color};
+  const b=getBuyer(mePid,otherKey);
+  return b?{name:b.name,color:b.color}:{name:otherKey,color:'teal'};
+}
+function revSalesArr(otherKey,mePid){
+  if(DB.persons[otherKey])return DB.persons[otherKey].sales.filter(r=>r.buyerPid===mePid);
+  const b=getBuyer(mePid,otherKey);if(!b)return[];if(!b.sales)b.sales=[];return b.sales;
+}
+function revPaysArr(otherKey,mePid){
+  if(DB.persons[otherKey])return DB.persons[otherKey].payments.filter(r=>r.fromPid===mePid);
+  const b=getBuyer(mePid,otherKey);if(!b)return[];if(!b.payments)b.payments=[];return b.payments;
+}
+function revCalc(otherKey,mePid){
+  const sales=revSalesArr(otherKey,mePid),pays=revPaysArr(otherKey,mePid);
+  const total=sales.reduce((s,r)=>s+r.qty*r.price,0);
+  const paid=pays.reduce((s,r)=>s+r.amount,0);
+  return{total,paid,bal:total-paid,sales,pays};
+}
+function prodsArr(salesArr){
+  const m={};
+  salesArr.forEach(r=>{const k=r.product.toLowerCase().trim();if(!m[k])m[k]={name:r.product,qty:0,tot:0};m[k].qty+=r.qty;m[k].tot+=r.qty*r.price;});
+  return Object.values(m).sort((a,b)=>b.tot-a.tot);
+}
+function revRender(otherKey,mePid){
+  const sid=`buy-${otherKey}`;
+  const{total,paid,bal,sales,pays}=revCalc(otherKey,mePid);
+  const cnt=sales.length;
+  const qty=sales.reduce((s,r)=>s+r.qty,0);
 
   const se=document.getElementById(sid+'-stats');
   if(se)se.innerHTML=`
@@ -1436,7 +1468,7 @@ function revRender(otherPid,mePid){
     <div class="sc gr"><div class="slbl">Ödediğim</div><div class="sval">₺${fmt(paid)}</div></div>
     <div class="sc ${bal>0?'ac':'gr'}"><div class="slbl">Kalan Borç</div><div class="sval" style="color:${bal>0?'var(--acc)':'var(--grn)'};">₺${fmt(bal)}</div></div>`;
 
-  const ps=prods(otherPid,mePid);
+  const ps=prodsArr(sales);
   const pe=document.getElementById(sid+'-prods');
   if(pe)pe.innerHTML=ps.length?ps.map(r=>`<div class="prow"><span class="pnm">${esc(r.name)}</span><span class="pqt">${r.qty} ad</span><span class="ptl">₺${fmt(r.tot)}</span></div>`).join(''):'<div class="empty">Kayıt yok</div>';
   const dl=document.getElementById(sid+'-dl');
@@ -1444,7 +1476,6 @@ function revRender(otherPid,mePid){
   const fp=document.getElementById(sid+'-fprod');
   if(fp){const cv=fp.value;fp.innerHTML='<option value="">Tüm Ürünler</option>';ps.forEach(r=>{const o=document.createElement('option');o.value=r.name.toLowerCase();o.textContent=r.name;fp.appendChild(o);});fp.value=cv;}
 
-  const pays=p.payments.filter(r=>r.fromPid===mePid);
   const paye=document.getElementById(sid+'-pays');
   if(paye)paye.innerHTML=pays.length
     ?[...pays].reverse().map(pay=>`
@@ -1452,20 +1483,20 @@ function revRender(otherPid,mePid){
           <span class="payd">${pay.date||'—'}</span>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="paya">+₺${fmt(pay.amount)}</span>
-            <button class="xb" onclick="revDelPay('${otherPid}','${pay.id}','${mePid}')">✕</button>
+            <button class="xb" onclick="revDelPay('${otherKey}','${pay.id}','${mePid}')">✕</button>
           </div>
         </div>`).join('')
     :'<div class="empty">Ödeme yok</div>';
 
-  revTable(otherPid,mePid);
+  revTable(otherKey,mePid);
 }
-function revTable(otherPid,mePid){
-  const sid=`buy-${otherPid}`;
-  const p=DB.persons[otherPid];if(!p)return;
+function revTable(otherKey,mePid){
+  const sid=`buy-${otherKey}`;
+  const all=revSalesArr(otherKey,mePid);
   const srch=(document.getElementById(sid+'-srch')?.value||'').toLowerCase().trim();
   const fv=(document.getElementById(sid+'-fprod')?.value||'').toLowerCase();
   const s=sortMap[sid]||{col:'date',dir:'desc'};
-  let rows=p.sales.filter(r=>r.buyerPid===mePid&&(!srch||r.product.toLowerCase().includes(srch))&&(!fv||r.product.toLowerCase()===fv));
+  let rows=all.filter(r=>(!srch||r.product.toLowerCase().includes(srch))&&(!fv||r.product.toLowerCase()===fv));
   rows=[...rows].sort((a,b)=>{
     let va,vb;
     if(s.col==='product'){va=a.product.toLowerCase();vb=b.product.toLowerCase();}
@@ -1481,26 +1512,26 @@ function revTable(otherPid,mePid){
     <td class="tnum">${r.qty}</td>
     <td class="tnum">₺${fmt(r.price)}</td>
     <td class="ttot">₺${fmt(r.qty*r.price)}</td>
-    <td><button class="xb" onclick="revDel('${otherPid}','${r.id}','${mePid}')">✕</button></td></tr>`).join('');
+    <td><button class="xb" onclick="revDel('${otherKey}','${r.id}','${mePid}')">✕</button></td></tr>`).join('');
   const tf=document.getElementById(sid+'-tfoot');if(!tf)return;
   const ft=rows.reduce((s,r)=>s+r.qty*r.price,0);
   const fq=rows.reduce((s,r)=>s+r.qty,0);
   tf.innerHTML=`<td colspan="2" style="color:var(--mut);">${rows.length} kayıt · ${fq} adet</td><td colspan="3" style="text-align:right;color:var(--red);">₺${fmt(ft)}</td><td></td>`;
 }
-function revSort(otherPid,mePid,col,dir){
-  const sid=`buy-${otherPid}`;
+function revSort(otherKey,mePid,col,dir){
+  const sid=`buy-${otherKey}`;
   sortMap[sid]={col,dir};
   document.getElementById(sid+'-sa')?.classList.toggle('on',col==='date'&&dir==='asc');
   document.getElementById(sid+'-sd')?.classList.toggle('on',col==='date'&&dir==='desc');
-  revTable(otherPid,mePid);
+  revTable(otherKey,mePid);
 }
-function revCol(otherPid,mePid,col){
-  const sid=`buy-${otherPid}`;
+function revCol(otherKey,mePid,col){
+  const sid=`buy-${otherKey}`;
   const s=sortMap[sid]||{col:'date',dir:'desc'};
-  revSort(otherPid,mePid,col,s.col===col&&s.dir==='desc'?'asc':'desc');
+  revSort(otherKey,mePid,col,s.col===col&&s.dir==='desc'?'asc':'desc');
 }
-function revSave(otherPid,mePid){
-  const sid=`buy-${otherPid}`;
+function revSave(otherKey,mePid){
+  const sid=`buy-${otherKey}`;
   const np=document.getElementById(sid+'-np');
   const nq=document.getElementById(sid+'-nq');
   const npr=document.getElementById(sid+'-npr');
@@ -1510,35 +1541,33 @@ function revSave(otherPid,mePid){
   if(!product){flash(np,'Ürün adı giriniz');return;}
   if(!qty||qty<=0){flash(nq,'Geçerli adet');return;}
   if(!price||price<=0){flash(npr,'Geçerli fiyat');return;}
-  DB.persons[otherPid].sales.push({
-    id:'s'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
-    date:document.getElementById(sid+'-nd')?.value||'',
-    product,qty,price,buyerPid:mePid
-  });
+  const rec={id:'s'+Date.now()+'_'+Math.random().toString(36).slice(2,5),date:document.getElementById(sid+'-nd')?.value||'',product,qty,price};
+  if(DB.persons[otherKey]){rec.buyerPid=mePid;DB.persons[otherKey].sales.push(rec);}
+  else{const b=getBuyer(mePid,otherKey);if(!b)return;if(!b.sales)b.sales=[];b.sales.push(rec);}
   np.value='';nq.value='';npr.value='';
   document.getElementById(sid+'-auto').value='';
-  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+  save();revRender(otherKey,mePid);renderNet(otherKey,mePid);renderDashboard(mePid);
 }
-function revDel(otherPid,id,mePid){
+function revDel(otherKey,id,mePid){
   if(!confirm('Sil?'))return;
-  DB.persons[otherPid].sales=DB.persons[otherPid].sales.filter(r=>r.id!==id);
-  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+  if(DB.persons[otherKey])DB.persons[otherKey].sales=DB.persons[otherKey].sales.filter(r=>r.id!==id);
+  else{const b=getBuyer(mePid,otherKey);if(b&&b.sales)b.sales=b.sales.filter(r=>r.id!==id);}
+  save();revRender(otherKey,mePid);renderNet(otherKey,mePid);renderDashboard(mePid);
 }
-function revPay(otherPid,mePid){
-  const sid=`buy-${otherPid}`;
+function revPay(otherKey,mePid){
+  const sid=`buy-${otherKey}`;
   const pa=document.getElementById(sid+'-pa');
   const amount=parseFloat(pa?.value);
   if(!amount||amount<=0){flash(pa,'Geçerli tutar');return;}
-  DB.persons[otherPid].payments.push({
-    id:'pay'+Date.now(),
-    date:document.getElementById(sid+'-pd')?.value||'',
-    amount,fromPid:mePid
-  });
-  pa.value='';save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+  const rec={id:'pay'+Date.now(),date:document.getElementById(sid+'-pd')?.value||'',amount};
+  if(DB.persons[otherKey]){rec.fromPid=mePid;DB.persons[otherKey].payments.push(rec);}
+  else{const b=getBuyer(mePid,otherKey);if(!b)return;if(!b.payments)b.payments=[];b.payments.push(rec);}
+  pa.value='';save();revRender(otherKey,mePid);renderNet(otherKey,mePid);renderDashboard(mePid);
 }
-function revDelPay(otherPid,id,mePid){
-  DB.persons[otherPid].payments=DB.persons[otherPid].payments.filter(p=>p.id!==id);
-  save();revRender(otherPid,mePid);renderNet(otherPid,mePid);renderDashboard(mePid);
+function revDelPay(otherKey,id,mePid){
+  if(DB.persons[otherKey])DB.persons[otherKey].payments=DB.persons[otherKey].payments.filter(p=>p.id!==id);
+  else{const b=getBuyer(mePid,otherKey);if(b&&b.payments)b.payments=b.payments.filter(p=>p.id!==id);}
+  save();revRender(otherKey,mePid);renderNet(otherKey,mePid);renderDashboard(mePid);
 }
 
 /* ════════════════════════════════
