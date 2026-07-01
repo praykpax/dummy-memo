@@ -394,20 +394,20 @@ tbody td{padding:9px 12px;font-size:12px;}
 <div class="add-buyer-modal" id="addBuyerModal">
   <div class="add-buyer-box">
     <div class="add-buyer-hdr">
-      <span class="add-buyer-tit">➕ Yeni Alıcı Ekle</span>
+      <span class="add-buyer-tit" id="ab-tit">➕ Yeni Alıcı Ekle</span>
       <button class="mx" onclick="closeAddBuyerModal()">✕</button>
     </div>
     <div class="add-buyer-body">
       <div style="margin-bottom:12px;">
         <label class="flbl">Alıcı Adı</label>
-        <input type="text" class="fi" id="ab-name" placeholder="Ad Soyad..." onkeydown="if(event.key==='Enter')confirmAddBuyer()">
+        <input type="text" class="fi" id="ab-name" placeholder="Ad Soyad..." onkeydown="if(event.key==='Enter')submitBuyer()">
       </div>
       <div style="margin-bottom:14px;">
         <label class="flbl">Renk</label>
         <div class="cpick" id="ab-cp" style="margin-top:4px;"></div>
       </div>
       <div style="display:flex;gap:8px;">
-        <button class="btn gr" style="flex:1;" onclick="confirmAddBuyer()">Ekle</button>
+        <button class="btn gr" style="flex:1;" id="ab-submit" onclick="submitBuyer()">Ekle</button>
         <button class="btn rd" style="width:auto;padding:9px 16px;" onclick="closeAddBuyerModal()">İptal</button>
       </div>
     </div>
@@ -1047,11 +1047,28 @@ function buildUser(){
    ALICI EKLEME MODAL
 ════════════════════════════════ */
 let _addBuyerPid=null;
+let _editBuyerId=null; // null → ekleme modu; dolu → düzenleme modu
 function openAddBuyerModal(pid){
   _addBuyerPid=pid;
+  _editBuyerId=null;
   abColor='teal';
+  document.getElementById('ab-tit').textContent='➕ Yeni Alıcı Ekle';
+  document.getElementById('ab-submit').textContent='Ekle';
   document.getElementById('ab-name').value='';
   cpick('ab-cp','teal',c=>{abColor=c;});
+  document.getElementById('addBuyerModal').classList.add('show');
+  setTimeout(()=>document.getElementById('ab-name').focus(),100);
+}
+function openEditBuyerModal(pid,bid){
+  const b=getBuyer(pid,bid);
+  if(!b)return;
+  _addBuyerPid=pid;
+  _editBuyerId=bid;
+  abColor=b.color||'teal';
+  document.getElementById('ab-tit').textContent='✎ Alıcıyı Düzenle';
+  document.getElementById('ab-submit').textContent='Kaydet';
+  document.getElementById('ab-name').value=b.name;
+  cpick('ab-cp',abColor,c=>{abColor=c;});
   document.getElementById('addBuyerModal').classList.add('show');
   setTimeout(()=>document.getElementById('ab-name').focus(),100);
 }
@@ -1061,6 +1078,10 @@ function closeAddBuyerModal(){
 document.getElementById('addBuyerModal').onclick=e=>{
   if(e.target===document.getElementById('addBuyerModal'))closeAddBuyerModal();
 };
+function submitBuyer(){
+  if(_editBuyerId)confirmEditBuyer();
+  else confirmAddBuyer();
+}
 function confirmAddBuyer(){
   const name=(document.getElementById('ab-name')?.value||'').trim();
   if(!name){flash(document.getElementById('ab-name'),'İsim giriniz');return;}
@@ -1078,6 +1099,53 @@ function confirmAddBuyer(){
   closeAddBuyerModal();
   showTab('rel-'+bid);
 }
+function confirmEditBuyer(){
+  const name=(document.getElementById('ab-name')?.value||'').trim();
+  if(!name){flash(document.getElementById('ab-name'),'İsim giriniz');return;}
+  const pid=_addBuyerPid, bid=_editBuyerId;
+  const b=getBuyer(pid,bid);
+  if(!b){closeAddBuyerModal();return;}
+  b.name=name; b.color=abColor;
+  // Sekme etiketini güncelle
+  const tabBtn=document.getElementById('T-rel-'+bid);
+  if(tabBtn)tabBtn.textContent=name;
+  // Paneli yeniden inşa et (başlık + renk için)
+  const oldPanel=document.getElementById('P-rel-'+bid);
+  if(oldPanel)oldPanel.remove();
+  buildRelPanel(pid,bid,name,abColor);
+  save();
+  renderDashboard(pid);
+  closeAddBuyerModal();
+  showTab('rel-'+bid);
+}
+function deleteBuyer(pid,bid){
+  const b=getBuyer(pid,bid);
+  if(!b)return;
+  const p=DB.persons[pid];
+  // Sattığım (forward) + Aldığım/Borcum (reverse, alıcı objesinde saklı) kayıtları say
+  const salesN=(p?p.sales.filter(r=>r.buyerPid===bid).length:0)+((b.sales||[]).length);
+  const paysN=(p?p.payments.filter(r=>r.fromPid===bid).length:0)+((b.payments||[]).length);
+  const uyari=(salesN||paysN)
+    ? `\n\nBu alıcıya ait ${salesN} satış/alış kaydı ve ${paysN} ödeme kaydı da SİLİNECEK.`
+    : '';
+  if(!confirm(`"${b.name}" adlı alıcı silinsin mi?${uyari}\n\nBu işlem geri alınamaz.`))return;
+  // İlişkili satış ve ödemeleri temizle
+  if(p){
+    p.sales=p.sales.filter(r=>r.buyerPid!==bid);
+    p.payments=p.payments.filter(r=>r.fromPid!==bid);
+  }
+  // Alıcıyı listeden çıkar
+  DB.buyers[pid]=getBuyers(pid).filter(x=>x.id!==bid);
+  // Sekme + paneli kaldır
+  const tabBtn=document.getElementById('T-rel-'+bid);
+  if(tabBtn)tabBtn.remove();
+  const panel=document.getElementById('P-rel-'+bid);
+  if(panel)panel.remove();
+  delete sortMap['rel-'+bid];
+  save();
+  renderDashboard(pid);
+  showTab('dash');
+}
 
 /* ════════════════════════════════
    İLİŞKİ PANELİ
@@ -1094,8 +1162,14 @@ function buildRelPanel(sellerPid, buyerPid, buyerName, buyerColor){
   const twoWay=true;
   const rsid=`buy-${buyerPid}`;
   if(twoWay&&!sortMap[rsid])sortMap[rsid]={col:'date',dir:'desc'};
+  const isCustom = !DB.persons[buyerPid];
+  const buyerCtrls = isCustom?`<div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="home-btn" style="padding:6px 12px;" onclick="openEditBuyerModal('${sellerPid}','${buyerPid}')">✎ Düzenle</button>
+        <button class="home-btn" style="padding:6px 12px;color:var(--red);border-color:var(--red);" onclick="deleteBuyer('${sellerPid}','${buyerPid}')">🗑 Sil</button>
+      </div>`:'';
 
   addPanel('rel-'+buyerPid,`
+    ${buyerCtrls?`<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">${buyerCtrls}</div>`:''}
     ${twoWay?`<div class="netbar" id="net-${buyerPid}"></div>`:''}
     ${twoWay?`<div class="seg">
       <button class="seg-btn on" id="seg-out-${buyerPid}" onclick="relView('${buyerPid}','out')">⬆ Sattığım</button>
